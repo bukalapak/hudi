@@ -109,7 +109,7 @@ public class HoodieLogFormatTest {
     assertTrue(fs.mkdirs(new Path(folder.getRoot().getPath())));
     this.partitionPath = new Path(folder.getRoot().getPath());
     this.basePath = folder.getRoot().getParent();
-    HoodieTestUtils.initTableType(fs, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.initTableType(MiniClusterUtil.configuration, basePath, HoodieTableType.MERGE_ON_READ);
   }
 
   @After
@@ -374,6 +374,7 @@ public class HoodieLogFormatTest {
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords1,
         dataBlockRead.getRecords());
 
+    reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
     assertEquals("Read records size should be equal to the written records size",
@@ -381,6 +382,7 @@ public class HoodieLogFormatTest {
     assertEquals("Both records lists should be the same. (ordering guaranteed)", copyOfRecords2,
         dataBlockRead.getRecords());
 
+    reader.hasNext();
     nextBlock = reader.next();
     dataBlockRead = (HoodieAvroDataBlock) nextBlock;
     assertEquals("Read records size should be equal to the written records size",

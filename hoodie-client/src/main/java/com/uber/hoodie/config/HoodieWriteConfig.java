@@ -25,6 +25,7 @@ import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
 import com.uber.hoodie.metrics.MetricsReporterType;
 import org.apache.spark.storage.StorageLevel;
+
 import javax.annotation.concurrent.Immutable;
 import java.io.File;
 import java.io.FileReader;
@@ -46,6 +47,8 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
+  private static final String WRITE_BUFFER_LIMIT_BYTES = "hoodie.write.buffer.limit.bytes";
+  private static final String DEFAULT_WRITE_BUFFER_LIMIT_BYTES = String.valueOf(4*1024*1024);
   private static final String COMBINE_BEFORE_INSERT_PROP = "hoodie.combine.before.insert";
   private static final String DEFAULT_COMBINE_BEFORE_INSERT = "false";
   private static final String COMBINE_BEFORE_UPSERT_PROP = "hoodie.combine.before.upsert";
@@ -102,6 +105,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
 
   public int getUpsertShuffleParallelism() {
     return Integer.parseInt(props.getProperty(UPSERT_PARALLELISM));
+  }
+
+  public int getWriteBufferLimitBytes() {
+    return Integer.parseInt(props.getProperty(WRITE_BUFFER_LIMIT_BYTES, DEFAULT_WRITE_BUFFER_LIMIT_BYTES));
   }
 
   public boolean shouldCombineBeforeInsert() {
@@ -275,11 +282,15 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Integer.parseInt(props.getProperty(HoodieIndexConfig.BUCKETED_INDEX_NUM_BUCKETS_PROP));
   }
 
+  public StorageLevel getBloomIndexInputStorageLevel() {
+    return StorageLevel.fromString(props.getProperty(HoodieIndexConfig.BLOOM_INDEX_INPUT_STORAGE_LEVEL));
+  }
+
   /**
    * storage properties
    **/
-  public int getParquetMaxFileSize() {
-    return Integer.parseInt(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
+  public long getParquetMaxFileSize() {
+    return Long.parseLong(props.getProperty(HoodieStorageConfig.PARQUET_FILE_MAX_BYTES));
   }
 
   public int getParquetBlockSize() {
@@ -384,6 +395,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     public Builder withParallelism(int insertShuffleParallelism, int upsertShuffleParallelism) {
       props.setProperty(INSERT_PARALLELISM, String.valueOf(insertShuffleParallelism));
       props.setProperty(UPSERT_PARALLELISM, String.valueOf(upsertShuffleParallelism));
+      return this;
+    }
+
+    public Builder withWriteBufferLimitBytes(int writeBufferLimit) {
+      props.setProperty(WRITE_BUFFER_LIMIT_BYTES, String.valueOf(writeBufferLimit));
       return this;
     }
 
