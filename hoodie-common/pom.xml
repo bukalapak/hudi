@@ -90,10 +90,6 @@
       <artifactId>jackson-annotations</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.codehaus.jackson</groupId>
-      <artifactId>jackson-mapper-asl</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
       <version>${parquet.version}</version>
@@ -113,11 +109,6 @@
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
       <classifier>tests</classifier>
-    </dependency>
-    <dependency>
-      <groupId>org.codehaus.jackson</groupId>
-      <artifactId>jackson-core-asl</artifactId>
-      <version>1.9.13</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>
@@ -143,6 +134,11 @@
       <artifactId>system-rules</artifactId>
       <version>1.16.0</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+        <groupId>com.twitter.common</groupId>
+        <artifactId>objectsize</artifactId>
+        <version>0.0.12</version>
     </dependency>
   </dependencies>
 </project>
