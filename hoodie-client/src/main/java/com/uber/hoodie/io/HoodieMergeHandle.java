@@ -22,6 +22,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
+import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.TableFileSystemView;
 import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.ReflectionUtils;
@@ -35,9 +36,11 @@ import com.uber.hoodie.io.storage.HoodieStorageWriter;
 import com.uber.hoodie.io.storage.HoodieStorageWriterFactory;
 import com.uber.hoodie.table.HoodieTable;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.Path;
@@ -52,6 +55,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
 
   private WriteStatus writeStatus;
   private Map<String, HoodieRecord<T>> keyToNewRecords;
+  private Set<String> writtenRecordKeys;
   private HoodieStorageWriter<IndexedRecord> storageWriter;
   private TableFileSystemView.ReadOptimizedView fileSystemView;
   private Path newFilePath;
@@ -81,6 +85,8 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
    * Extract old file path, initialize StorageWriter and WriteStatus
    */
   private void init(String fileId, String partitionPath) {
+    this.writtenRecordKeys = new HashSet<>();
+
     WriteStatus writeStatus = ReflectionUtils.loadClass(config.getWriteStatusClassName());
     writeStatus.setStat(new HoodieWriteStat());
     this.writeStatus = writeStatus;
@@ -205,7 +211,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
            */
           copyOldRecord = false;
         }
-        keyToNewRecords.remove(key);
+        writtenRecordKeys.add(key);
       } catch (Exception e) {
         throw new HoodieUpsertException(
             "Failed to combine/merge new record with old value in storage, for new record {"
@@ -239,10 +245,13 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       Iterator<String> pendingRecordsItr = keyToNewRecords.keySet().iterator();
       while (pendingRecordsItr.hasNext()) {
         String key = pendingRecordsItr.next();
-        HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
-        writeUpdateRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(schema));
+        if (!writtenRecordKeys.contains(key)) {
+          HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
+          writeUpdateRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(schema));
+        }
       }
       keyToNewRecords.clear();
+      writtenRecordKeys.clear();
 
       if (storageWriter != null) {
         storageWriter.close();
@@ -253,6 +262,9 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       writeStatus.getStat().setNumDeletes(recordsDeleted);
       writeStatus.getStat().setNumUpdateWrites(updatedRecordsWritten);
       writeStatus.getStat().setTotalWriteErrors(writeStatus.getFailedRecords().size());
+      RuntimeStats runtimeStats = new RuntimeStats();
+      runtimeStats.setTotalUpsertTime(timer.endTimer());
+      writeStatus.getStat().setRuntimeStats(runtimeStats);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
     }
