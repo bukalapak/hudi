@@ -112,7 +112,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
-    public Builder toUdpPort(int port) {
+    public Builder onUdpPort(int port) {
       props.setProperty(UDP_SERVER_PORT, String.valueOf(port));
       return this;
     }
