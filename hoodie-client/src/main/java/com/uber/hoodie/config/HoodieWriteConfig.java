@@ -345,6 +345,18 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public String getGraphiteMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.GRAPHITE_METRIC_PREFIX);
   }
+
+  public String getUdpServerHost() {
+    return props.getProperty(HoodieMetricsConfig.UDP_SERVER_HOST);
+  }
+
+  public int getUdpServerPort() {
+    return Integer.parseInt(props.getProperty(HoodieMetricsConfig.UDP_SERVER_PORT));
+  }
+
+  public String getUdpMetricPrefix() {
+    return props.getProperty(HoodieMetricsConfig.UDP_METRIC_PREFIX);
+  }
   
   /**
    * memory configs

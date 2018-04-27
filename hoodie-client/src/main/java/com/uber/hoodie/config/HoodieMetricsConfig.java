@@ -46,6 +46,14 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
   public static final String GRAPHITE_METRIC_PREFIX = GRAPHITE_PREFIX + ".metric.prefix";
 
+  // UDP
+  public static final String UDP_PREFIX = METRIC_PREFIX + ".udp";
+  public static final String UDP_SERVER_HOST = UDP_PREFIX + ".host";
+  public static final String DEFAULT_UDP_SERVER_HOST = "localhost";
+  public static final String UDP_SERVER_PORT = UDP_PREFIX + ".port";
+  public static final int DEFAULT_UDP_SERVER_PORT = 8080;
+  public static final String UDP_METRIC_PREFIX = UDP_PREFIX + ".metric.prefix";
+
   private HoodieMetricsConfig(Properties props) {
     super(props);
   }
@@ -99,6 +107,21 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder toUdpHost(String host) {
+      props.setProperty(UDP_SERVER_HOST, host);
+      return this;
+    }
+
+    public Builder toUdpPort(int port) {
+      props.setProperty(UDP_SERVER_PORT, String.valueOf(port));
+      return this;
+    }
+
+    public Builder useUdpPrefix(String prefix) {
+      props.setProperty(UDP_METRIC_PREFIX, prefix);
+      return this;
+    }
+
     public HoodieMetricsConfig build() {
       HoodieMetricsConfig config = new HoodieMetricsConfig(props);
       setDefaultOnCondition(props, !props.containsKey(METRICS_ON), METRICS_ON,
@@ -109,8 +132,9 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           DEFAULT_GRAPHITE_SERVER_HOST);
       setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
           String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
-      setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,
-          String.valueOf(DEFAULT_GRAPHITE_SERVER_PORT));
+      setDefaultOnCondition(props, !props.containsKey(UDP_SERVER_HOST), UDP_SERVER_HOST, DEFAULT_UDP_SERVER_HOST);
+      setDefaultOnCondition(props, !props.containsKey(UDP_SERVER_PORT), UDP_SERVER_PORT,
+          String.valueOf(DEFAULT_UDP_SERVER_PORT));
       return config;
     }
   }

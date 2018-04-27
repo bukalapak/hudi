@@ -38,6 +38,9 @@ public class MetricsReporterFactory {
       case INMEMORY:
         reporter = new InMemoryMetricsReporter();
         break;
+      case UDP:
+        reporter = new MetricsUdpReporter(config);
+        break;
       default:
         logger.error("Reporter type[" + type + "] is not supported.");
         break;

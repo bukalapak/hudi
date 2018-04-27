@@ -164,23 +164,30 @@ public class HoodieMetrics {
 
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
-    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
+    if (config == null)
+      return null;
+
+    String pattern = config.getMetricsReporterType().equals(MetricsReporterType.GRAPHITE) ? "%s.%s.%s" : "%s_%s_%s";
+    return String.format(pattern, tableName, action, metric);
   }
 
   void registerGauge(String metricName, final long value) {
-    try {
-      MetricRegistry registry = Metrics.getInstance().getRegistry();
-      registry.register(metricName, new Gauge<Long>() {
-        @Override
-        public Long getValue() {
-          return value;
+    switch (config.getMetricsReporterType()) {
+      case GRAPHITE:
+        try {
+          MetricRegistry registry = Metrics.getInstance().getRegistry();
+          registry.register(metricName, (Gauge<Long>) () -> value);
+        } catch (Exception e) {
+          // Here we catch all exception, so the major upsert pipeline will not be affected if the
+          // metrics system
+          // has some issues.
+          logger.error("Failed to send metrics: ", e);
         }
-      });
-    } catch (Exception e) {
-      // Here we catch all exception, so the major upsert pipeline will not be affected if the
-      // metrics system
-      // has some issues.
-      logger.error("Failed to send metrics: ", e);
+        break;
+      case UDP:
+        String message = String.format("%s_%s|g|%d", config.getUdpMetricPrefix(), metricName, value);
+        Metrics.getInstance().sendToUdp(message);
+        break;
     }
   }
 

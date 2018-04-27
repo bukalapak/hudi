@@ -79,4 +79,8 @@ public class Metrics {
   public Closeable getReporter() {
     return reporter.getReporter();
   }
+
+  public void sendToUdp(String message) {
+    ((MetricsUdpReporter) reporter).sendMessage(message);
+  }
 }
