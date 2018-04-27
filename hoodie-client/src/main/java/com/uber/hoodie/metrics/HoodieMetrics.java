@@ -181,10 +181,14 @@ public class HoodieMetrics {
         }
         break;
       case UDP:
-        String[] metrics = metricName.split(".");
-        String message = String.format("%s|g|table=%s;action=%s;metric=%s|%d",
-                config.getUdpMetricPrefix(), metrics[0], metrics[1], metrics[2], value);
-        Metrics.getInstance().sendToUdp(message);
+        try {
+          String[] metrics = metricName.split(".");
+          String message = String.format("%s|g|table=%s;action=%s;metric=%s|%d",
+                  config.getUdpMetricPrefix(), metrics[0], metrics[1], metrics[2], value);
+          Metrics.getInstance().sendToUdp(message);
+        } catch (Exception e) {
+          logger.error("Failed to send metrics: " + metricName, e);
+        }
         break;
     }
   }
