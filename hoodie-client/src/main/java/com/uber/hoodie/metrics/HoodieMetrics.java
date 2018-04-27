@@ -166,7 +166,6 @@ public class HoodieMetrics {
   String getMetricsName(String action, String metric) {
     if (config == null)
       return null;
-
     String pattern = config.getMetricsReporterType().equals(MetricsReporterType.GRAPHITE) ? "%s.%s.%s" : "%s_%s_%s";
     return String.format(pattern, tableName, action, metric);
   }

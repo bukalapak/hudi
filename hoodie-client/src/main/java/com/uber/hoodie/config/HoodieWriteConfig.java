@@ -357,7 +357,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public String getUdpMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.UDP_METRIC_PREFIX);
   }
-  
+
   /**
    * memory configs
    */
