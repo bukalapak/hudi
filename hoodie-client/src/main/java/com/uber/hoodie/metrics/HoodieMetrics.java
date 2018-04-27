@@ -164,10 +164,7 @@ public class HoodieMetrics {
 
   @VisibleForTesting
   String getMetricsName(String action, String metric) {
-    if (config == null)
-      return null;
-    String pattern = config.getMetricsReporterType().equals(MetricsReporterType.GRAPHITE) ? "%s.%s.%s" : "%s_%s_%s";
-    return String.format(pattern, tableName, action, metric);
+    return config == null ? null : String.format("%s.%s.%s", tableName, action, metric);
   }
 
   void registerGauge(String metricName, final long value) {
@@ -184,7 +181,9 @@ public class HoodieMetrics {
         }
         break;
       case UDP:
-        String message = String.format("%s_%s|g|%d", config.getUdpMetricPrefix(), metricName, value);
+        String[] metrics = metricName.split(".");
+        String message = String.format("%s|g|table=%s;action=%s;metric=%s|%d",
+                config.getUdpMetricPrefix(), metrics[0], metrics[1], metrics[2], value);
         Metrics.getInstance().sendToUdp(message);
         break;
     }
