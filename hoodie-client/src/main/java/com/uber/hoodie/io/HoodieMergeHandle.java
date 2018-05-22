@@ -24,7 +24,9 @@ import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.model.HoodieWriteStat.RuntimeStats;
 import com.uber.hoodie.common.table.TableFileSystemView;
+import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
@@ -141,8 +143,10 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
     try {
       // Load the new records in a map
       logger.info("MaxMemoryPerPartitionMerge => " + config.getMaxMemoryPerPartitionMerge());
-      this.keyToNewRecords = new ExternalSpillableMap<>(config.getMaxMemoryPerPartitionMerge(), Optional.empty(),
-          new StringConverter(), new HoodieRecordConverter(schema, config.getPayloadClass()));
+      this.keyToNewRecords = new ExternalSpillableMap<>(config.getMaxMemoryPerPartitionMerge(),
+          config.getSpillableMapBasePath(), new StringConverter(),
+          new HoodieRecordConverter(schema, config.getPayloadClass()),
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }

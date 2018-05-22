@@ -25,7 +25,9 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
+import com.uber.hoodie.common.util.DefaultSizeEstimator;
 import com.uber.hoodie.common.util.HoodieAvroUtils;
+import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.SchemaTestUtil;
 import com.uber.hoodie.common.util.SpillableMapTestUtils;
 import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
@@ -41,6 +43,7 @@ import java.util.Optional;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
@@ -49,14 +52,24 @@ import org.junit.runners.MethodSorters;
 public class TestExternalSpillableMap {
 
   private static final String FAILURE_OUTPUT_PATH = "/tmp/test_fail";
+  private static final String BASE_OUTPUT_PATH = "/tmp/";
+
+  @BeforeClass
+  public static void cleanUp() {
+    File file = new File(BASE_OUTPUT_PATH);
+    file.delete();
+    file = new File(FAILURE_OUTPUT_PATH);
+    file.delete();
+  }
 
   @Test
   public void simpleInsertTest() throws IOException, URISyntaxException {
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.empty(), new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -77,8 +90,9 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -115,8 +129,9 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.empty(), new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     // insert a bunch of records so that values spill to disk too
@@ -170,8 +185,9 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+        new ExternalSpillableMap<>(16L, FAILURE_OUTPUT_PATH, new StringConverter(),
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<IndexedRecord> iRecords = SchemaTestUtil.generateHoodieTestRecords(0, 100);
     List<String> recordKeys = SpillableMapTestUtils.upsertRecords(iRecords, records);
@@ -183,20 +199,15 @@ public class TestExternalSpillableMap {
   }
 
   @Test
-  public void simpleTestWithExceptionValidateFileIsRemoved() throws Exception {
-    File file = new File(FAILURE_OUTPUT_PATH);
-    assertFalse(file.exists());
-  }
-
-  @Test
   public void testDataCorrectnessWithUpsertsToDataInMapAndOnDisk() throws IOException, URISyntaxException {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk
@@ -248,8 +259,9 @@ public class TestExternalSpillableMap {
     String payloadClazz = HoodieAvroPayload.class.getName();
 
     ExternalSpillableMap<String, HoodieRecord<? extends HoodieRecordPayload>> records =
-        new ExternalSpillableMap<>(16L, Optional.of(FAILURE_OUTPUT_PATH), new StringConverter(),
-            new HoodieRecordConverter(schema, payloadClazz)); //16B
+        new ExternalSpillableMap<>(16L, BASE_OUTPUT_PATH, new StringConverter(),
+            new HoodieRecordConverter(schema, payloadClazz),
+            new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema)); //16B
 
     List<String> recordKeys = new ArrayList<>();
     // Ensure we spill to disk

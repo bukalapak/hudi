@@ -24,8 +24,8 @@ import com.uber.hoodie.cli.TableHeader;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
-import com.uber.hoodie.common.table.log.HoodieCompactedLogRecordScanner;
 import com.uber.hoodie.common.table.log.HoodieLogFormat;
+import com.uber.hoodie.common.table.log.HoodieMergedLogRecordScanner;
 import com.uber.hoodie.common.table.log.block.HoodieAvroDataBlock;
 import com.uber.hoodie.common.table.log.block.HoodieCorruptBlock;
 import com.uber.hoodie.common.table.log.block.HoodieLogBlock;
@@ -82,6 +82,7 @@ public class HoodieLogFileCommand implements CommandMarker {
         commitCountAndMetadata = Maps.newHashMap();
     int totalEntries = 0;
     int numCorruptBlocks = 0;
+    int dummyInstantTimeCount = 0;
 
     for (String logFilePath : logFilePaths) {
       FileStatus[] fsStatus = fs.listStatus(new Path(logFilePath));
@@ -108,6 +109,11 @@ public class HoodieLogFileCommand implements CommandMarker {
           }
         } else {
           instantTime = n.getLogBlockHeader().get(HeaderMetadataType.INSTANT_TIME);
+          if (instantTime == null) {
+            // This can happen when reading archived commit files since they were written without any instant time
+            dummyInstantTimeCount++;
+            instantTime = "dummy_instant_time_" + dummyInstantTimeCount;
+          }
           if (n instanceof HoodieAvroDataBlock) {
             recordCount = ((HoodieAvroDataBlock) n).getRecords().size();
           }
@@ -181,14 +187,15 @@ public class HoodieLogFileCommand implements CommandMarker {
 
     if (shouldMerge) {
       System.out.println("===========================> MERGING RECORDS <===================");
-      HoodieCompactedLogRecordScanner scanner = new HoodieCompactedLogRecordScanner(fs,
+      HoodieMergedLogRecordScanner scanner = new HoodieMergedLogRecordScanner(fs,
           HoodieCLI.tableMetadata.getBasePath(), logFilePaths, readerSchema,
           HoodieCLI.tableMetadata.getActiveTimeline().getCommitTimeline().lastInstant().get()
               .getTimestamp(),
           Long.valueOf(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES),
           Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED),
           Boolean.valueOf(HoodieCompactionConfig.DEFAULT_COMPACTION_REVERSE_LOG_READ_ENABLED),
-          Integer.valueOf(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE));
+          Integer.valueOf(HoodieMemoryConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE),
+          HoodieMemoryConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH);
       for (HoodieRecord<? extends HoodieRecordPayload> hoodieRecord : scanner) {
         Optional<IndexedRecord> record = hoodieRecord.getData().getInsertValue(readerSchema);
         if (allRecords.size() >= limit) {
