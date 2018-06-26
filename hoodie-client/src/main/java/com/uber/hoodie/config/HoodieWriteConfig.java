@@ -41,7 +41,7 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public static final String TABLE_NAME = "hoodie.table.name";
   private static final String BASE_PATH_PROP = "hoodie.base.path";
   private static final String AVRO_SCHEMA = "hoodie.avro.schema";
-  private static final String DEFAULT_PARALLELISM = "200";
+  private static final String DEFAULT_PARALLELISM = "1500";
   private static final String INSERT_PARALLELISM = "hoodie.insert.shuffle.parallelism";
   private static final String BULKINSERT_PARALLELISM = "hoodie.bulkinsert.shuffle.parallelism";
   private static final String UPSERT_PARALLELISM = "hoodie.upsert.shuffle.parallelism";
@@ -237,6 +237,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return props.getProperty(HoodieCompactionConfig.PAYLOAD_CLASS_PROP);
   }
 
+  public int getTargetPartitionsPerDayBasedCompaction() {
+    return Integer
+        .parseInt(props.getProperty(HoodieCompactionConfig.TARGET_PARTITIONS_PER_DAYBASED_COMPACTION_PROP));
+  }
+
   /**
    * index properties
    **/
@@ -322,6 +327,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
     return Double.valueOf(props.getProperty(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO));
   }
 
+  public double getLogFileToParquetCompressionRatio() {
+    return Double.valueOf(props.getProperty(HoodieStorageConfig.LOGFILE_TO_PARQUET_COMPRESSION_RATIO));
+  }
+
   /**
    * metrics properties
    **/
@@ -357,7 +366,6 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public String getUdpMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.UDP_METRIC_PREFIX);
   }
-
   /**
    * memory configs
    */
