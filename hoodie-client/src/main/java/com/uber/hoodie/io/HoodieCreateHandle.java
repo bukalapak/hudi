@@ -48,6 +48,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
   private final Path path;
   private Path tempPath = null;
   private long recordsWritten = 0;
+  private long insertRecordsWritten = 0;
   private long recordsDeleted = 0;
   private Iterator<HoodieRecord<T>> recordIterator;
 
@@ -75,7 +76,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       throw new HoodieInsertException(
           "Failed to initialize HoodieStorageWriter for path " + getStorageWriterPath(), e);
     }
-    logger.info("New InsertHandle for partition :" + partitionPath);
+    logger.info("New InsertHandle for partition :" + partitionPath + " with fileId " + fileId);
   }
 
   public HoodieCreateHandle(HoodieWriteConfig config, String commitTime, HoodieTable<T> hoodieTable,
@@ -100,6 +101,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
         // update the new location of record, so we know where to find it next
         record.setNewLocation(new HoodieRecordLocation(commitTime, status.getFileId()));
         recordsWritten++;
+        insertRecordsWritten++;
       } else {
         recordsDeleted++;
       }
@@ -149,6 +151,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload> extends HoodieIOH
       HoodieWriteStat stat = new HoodieWriteStat();
       stat.setNumWrites(recordsWritten);
       stat.setNumDeletes(recordsDeleted);
+      stat.setNumInserts(insertRecordsWritten);
       stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
       stat.setFileId(status.getFileId());
       stat.setPaths(new Path(config.getBasePath()), path, tempPath);
