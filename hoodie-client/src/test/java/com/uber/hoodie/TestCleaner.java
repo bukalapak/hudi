@@ -46,6 +46,7 @@ import com.uber.hoodie.common.table.timeline.HoodieInstant.State;
 import com.uber.hoodie.common.util.AvroUtils;
 import com.uber.hoodie.common.util.CompactionUtils;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.config.HoodieCompactionConfig;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.index.HoodieIndex;
@@ -64,7 +65,6 @@ import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
@@ -84,6 +84,11 @@ public class TestCleaner extends TestHoodieClientBase {
 
   private static final int BIG_BATCH_INSERT_SIZE = 500;
   private static Logger logger = LogManager.getLogger(TestHoodieClientBase.class);
+
+  @Override
+  public void tearDown() throws IOException {
+    super.tearDown();
+  }
 
   /**
    * Helper method to do first batch of insert for clean by versions/commits tests
@@ -251,7 +256,7 @@ public class TestCleaner extends TestHoodieClientBase {
           HashMap<String, TreeSet<String>> fileIdToVersions = new HashMap<>();
           for (HoodieInstant entry : timeline.getInstants().collect(Collectors.toList())) {
             HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-                .fromBytes(timeline.getInstantDetails(entry).get());
+                .fromBytes(timeline.getInstantDetails(entry).get(), HoodieCommitMetadata.class);
 
             for (HoodieWriteStat wstat : commitMetadata.getWriteStats(partitionPath)) {
               if (!fileIdToVersions.containsKey(wstat.getFileId())) {

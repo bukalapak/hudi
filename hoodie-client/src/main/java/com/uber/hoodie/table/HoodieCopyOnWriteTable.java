@@ -28,12 +28,14 @@ import com.uber.hoodie.common.model.HoodieKey;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
 import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryExecutor;
 import com.uber.hoodie.common.util.queue.BoundedInMemoryQueueConsumer;
 import com.uber.hoodie.config.HoodieWriteConfig;
@@ -62,7 +64,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -643,12 +644,18 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      */
     private HashMap<Integer, BucketInfo> bucketInfoMap;
 
+    /**
+     * Rolling stats for files
+     */
+    protected HoodieRollingStatMetadata rollingStatMetadata;
+    protected long averageRecordSize;
+
     UpsertPartitioner(WorkloadProfile profile) {
       updateLocationToBucket = new HashMap<>();
       partitionPathToInsertBuckets = new HashMap<>();
       bucketInfoMap = new HashMap<>();
       globalStat = profile.getGlobalStat();
-
+      rollingStatMetadata = getRollingStats();
       assignUpdates(profile);
       assignInserts(profile);
 
@@ -792,7 +799,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
      * Obtains the average record size based on records written during last commit. Used for
      * estimating how many records pack into one file.
      */
-    private long averageBytesPerRecord() {
+    protected long averageBytesPerRecord() {
       long avgSize = 0L;
       HoodieTimeline commitTimeline = metaClient.getActiveTimeline().getCommitTimeline()
           .filterCompletedInstants();
@@ -800,7 +807,7 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         if (!commitTimeline.empty()) {
           HoodieInstant latestCommitTime = commitTimeline.lastInstant().get();
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(latestCommitTime).get());
+              .fromBytes(commitTimeline.getInstantDetails(latestCommitTime).get(), HoodieCommitMetadata.class);
           avgSize = (long) Math.ceil(
               (1.0 * commitMetadata.fetchTotalBytesWritten()) / commitMetadata
                   .fetchTotalRecordsWritten());
@@ -851,5 +858,9 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
         return targetBuckets.get(0).bucketNumber;
       }
     }
+  }
+
+  protected HoodieRollingStatMetadata getRollingStats() {
+    return null;
   }
 }

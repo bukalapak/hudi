@@ -22,27 +22,33 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
+import com.uber.hoodie.common.model.HoodieFileFormat;
 import com.uber.hoodie.common.model.HoodieLogFile;
 import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
 import com.uber.hoodie.common.util.FSUtils;
+import com.uber.hoodie.common.util.collection.Pair;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.InvalidDatasetException;
 import com.uber.hoodie.hive.util.SchemaUtil;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.Driver;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.commons.dbcp.BasicDataSource;
+import org.apache.commons.dbcp.ConnectionFactory;
+import org.apache.commons.dbcp.DriverConnectionFactory;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -147,46 +153,41 @@ public class HoodieHiveClient {
     alterSQL.append(syncConfig.databaseName).append(".").append(syncConfig.tableName)
         .append(" ADD IF NOT EXISTS ");
     for (String partition : partitions) {
-
-      StringBuilder partBuilder = new StringBuilder();
-      List<String> partitionValues = partitionValueExtractor
-          .extractPartitionValuesInPath(partition);
-      Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-          "Partition key parts " + syncConfig.partitionFields
-              + " does not match with partition values " + partitionValues
-              + ". Check partition strategy. ");
-      for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-        partBuilder.append(syncConfig.partitionFields.get(i)).append("=").append("'")
-            .append(partitionValues.get(i)).append("'");
-      }
-
+      String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = new Path(syncConfig.basePath, partition).toString();
-      alterSQL.append("  PARTITION (").append(partBuilder.toString()).append(") LOCATION '")
+      alterSQL.append("  PARTITION (").append(partitionClause).append(") LOCATION '")
           .append(fullPartitionPath).append("' ");
     }
     return alterSQL.toString();
+  }
+
+  /**
+   * Generate Hive Partition from partition values
+   * @param partition Partition path
+   * @return
+   */
+  private String getPartitionClause(String partition) {
+    List<String> partitionValues = partitionValueExtractor
+        .extractPartitionValuesInPath(partition);
+    Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
+        "Partition key parts " + syncConfig.partitionFields
+            + " does not match with partition values " + partitionValues
+            + ". Check partition strategy. ");
+    List<String> partBuilder = new ArrayList<>();
+    for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
+      partBuilder.add(syncConfig.partitionFields.get(i) + "=" + "'" + partitionValues.get(i) + "'");
+    }
+    return partBuilder.stream().collect(Collectors.joining(","));
   }
 
   private List<String> constructChangePartitions(List<String> partitions) {
     List<String> changePartitions = Lists.newArrayList();
     String alterTable = "ALTER TABLE " + syncConfig.databaseName + "." + syncConfig.tableName;
     for (String partition : partitions) {
-      StringBuilder partBuilder = new StringBuilder();
-      List<String> partitionValues = partitionValueExtractor
-          .extractPartitionValuesInPath(partition);
-      Preconditions.checkArgument(syncConfig.partitionFields.size() == partitionValues.size(),
-          "Partition key parts " + syncConfig.partitionFields
-              + " does not match with partition values " + partitionValues
-              + ". Check partition strategy. ");
-      for (int i = 0; i < syncConfig.partitionFields.size(); i++) {
-        partBuilder.append(syncConfig.partitionFields.get(i)).append("=").append("'")
-            .append(partitionValues.get(i)).append("'");
-      }
-
+      String partitionClause = getPartitionClause(partition);
       String fullPartitionPath = new Path(syncConfig.basePath, partition).toString();
       String changePartition =
-          alterTable + " PARTITION (" + partBuilder.toString() + ") SET LOCATION '"
-              + "hdfs://nameservice1" + fullPartitionPath + "'";
+          alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
       changePartitions.add(changePartition);
     }
     return changePartitions;
@@ -234,7 +235,7 @@ public class HoodieHiveClient {
 
   void updateTableDefinition(MessageType newSchema) {
     try {
-      String newSchemaStr = SchemaUtil.generateSchemaString(newSchema);
+      String newSchemaStr = SchemaUtil.generateSchemaString(newSchema, syncConfig.partitionFields);
       // Cascade clause should not be present for non-partitioned tables
       String cascadeClause = syncConfig.partitionFields.size() > 0 ? " cascade" : "";
       StringBuilder sqlBuilder = new StringBuilder("ALTER TABLE ").append("`")
@@ -242,7 +243,7 @@ public class HoodieHiveClient {
           .append(syncConfig.tableName).append("`")
           .append(" REPLACE COLUMNS(").append(newSchemaStr).append(" )")
           .append(cascadeClause);
-      LOG.info("Creating table with " + sqlBuilder);
+      LOG.info("Updating table definition with " + sqlBuilder);
       updateHiveSQL(sqlBuilder.toString());
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to update table for " + syncConfig.tableName, e);
@@ -307,11 +308,12 @@ public class HoodieHiveClient {
           HoodieInstant lastCommit = activeTimeline.lastInstant().orElseThrow(
               () -> new InvalidDatasetException(syncConfig.basePath));
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
-              activeTimeline.getInstantDetails(lastCommit).get());
+              activeTimeline.getInstantDetails(lastCommit).get(), HoodieCommitMetadata.class);
           String filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
               .stream().findAny().orElseThrow(() -> new IllegalArgumentException(
                   "Could not find any data file written for commit " + lastCommit
-                      + ", could not get schema for dataset " + metaClient.getBasePath()));
+                      + ", could not get schema for dataset " + metaClient.getBasePath()
+                      + ", Metadata :" + commitMetadata));
           return readSchemaFromDataFile(new Path(filePath));
         case MERGE_ON_READ:
           // If this is MOR, depending on whether the latest commit is a delta commit or
@@ -339,13 +341,32 @@ public class HoodieHiveClient {
             HoodieInstant lastDeltaInstant = lastDeltaCommit.get();
             // read from the log file wrote
             commitMetadata = HoodieCommitMetadata.fromBytes(
-                activeTimeline.getInstantDetails(lastDeltaInstant).get());
-            filePath = commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
-                .stream().filter(s -> s.contains(HoodieLogFile.DELTA_EXTENSION))
-                .findAny().orElseThrow(() -> new IllegalArgumentException(
-                    "Could not find any data file written for commit " + lastDeltaInstant
-                        + ", could not get schema for dataset " + metaClient.getBasePath()));
-            return readSchemaFromLogFile(lastCompactionCommit, new Path(filePath));
+                activeTimeline.getInstantDetails(lastDeltaInstant).get(), HoodieCommitMetadata.class);
+            Pair<String, HoodieFileFormat> filePathWithFormat =
+                commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
+                    .stream().filter(s -> s.contains(HoodieLogFile.DELTA_EXTENSION))
+                    .findAny().map(f -> Pair.of(f, HoodieFileFormat.HOODIE_LOG))
+                    .orElseGet(() -> {
+                      // No Log files in Delta-Commit. Check if there are any parquet files
+                      return commitMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream()
+                          .filter(s -> s.contains((metaClient.getTableConfig().getROFileFormat().getFileExtension())))
+                          .findAny()
+                          .map(f -> Pair.of(f, HoodieFileFormat.PARQUET)).orElseThrow(() -> {
+                            return new IllegalArgumentException(
+                                "Could not find any data file written for commit " + lastDeltaInstant
+                                    + ", could not get schema for dataset " + metaClient.getBasePath()
+                                    + ", CommitMetadata :" + commitMetadata);
+                          });
+                    });
+            switch (filePathWithFormat.getRight()) {
+              case HOODIE_LOG:
+                return readSchemaFromLogFile(lastCompactionCommit, new Path(filePathWithFormat.getLeft()));
+              case PARQUET:
+                return readSchemaFromDataFile(new Path(filePathWithFormat.getLeft()));
+              default:
+                throw new IllegalArgumentException("Unknown file format :" + filePathWithFormat.getRight()
+                    + " for file " + filePathWithFormat.getLeft());
+            }
           } else {
             return readSchemaFromLastCompaction(lastCompactionCommit);
           }
@@ -372,7 +393,7 @@ public class HoodieHiveClient {
 
     // Read from the compacted file wrote
     HoodieCommitMetadata compactionMetadata = HoodieCommitMetadata.fromBytes(
-        activeTimeline.getInstantDetails(lastCompactionCommit).get());
+        activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values()
         .stream().findAny().orElseThrow(() -> new IllegalArgumentException(
             "Could not find any data file written for compaction " + lastCompactionCommit
@@ -442,14 +463,15 @@ public class HoodieHiveClient {
 
   private void createHiveConnection() {
     if (connection == null) {
-      BasicDataSource ds = new BasicDataSource();
-      ds.setDriverClassName(driverName);
+      BasicDataSource ds = new HiveDataSource();
+      ds.setDriverClassName(HiveDriver.class.getCanonicalName());
       ds.setUrl(getHiveJdbcUrlWithDefaultDBName());
       ds.setUsername(syncConfig.hiveUser);
       ds.setPassword(syncConfig.hivePass);
       LOG.info("Getting Hive Connection from Datasource " + ds);
       try {
         this.connection = ds.getConnection();
+        LOG.info("Successfully got Hive Connection from Datasource " + ds);
       } catch (SQLException e) {
         throw new HoodieHiveSyncException(
             "Cannot create hive connection " + getHiveJdbcUrlWithDefaultDBName(), e);
@@ -539,7 +561,7 @@ public class HoodieHiveClient {
           Integer.MAX_VALUE);
       return timelineToSync.getInstants().map(s -> {
         try {
-          return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(s).get());
+          return HoodieCommitMetadata.fromBytes(activeTimeline.getInstantDetails(s).get(), HoodieCommitMetadata.class);
         } catch (IOException e) {
           throw new HoodieIOException(
               "Failed to get partitions written since " + lastCommitTimeSynced, e);
@@ -587,6 +609,56 @@ public class HoodieHiveClient {
 
     static PartitionEvent newPartitionUpdateEvent(String storagePartition) {
       return new PartitionEvent(PartitionEventType.UPDATE, storagePartition);
+    }
+  }
+
+  /**
+   * There is a bug in BasicDataSource implementation (dbcp-1.4) which does not allow custom version of Driver (needed
+   * to talk to older version of HiveServer2 including CDH-5x). This is fixed in dbcp-2x but we are using dbcp1.4.
+   * Adding a workaround here. TODO: varadarb We need to investigate moving to dbcp-2x
+   */
+  protected class HiveDataSource extends BasicDataSource {
+
+    protected ConnectionFactory createConnectionFactory() throws SQLException {
+      try {
+        Driver driver = HiveDriver.class.newInstance();
+        // Can't test without a validationQuery
+        if (validationQuery == null) {
+          setTestOnBorrow(false);
+          setTestOnReturn(false);
+          setTestWhileIdle(false);
+        }
+
+        // Set up the driver connection factory we will use
+        String user = username;
+        if (user != null) {
+          connectionProperties.put("user", user);
+        } else {
+          log("DBCP DataSource configured without a 'username'");
+        }
+
+        String pwd = password;
+        if (pwd != null) {
+          connectionProperties.put("password", pwd);
+        } else {
+          log("DBCP DataSource configured without a 'password'");
+        }
+
+        ConnectionFactory driverConnectionFactory = new DriverConnectionFactory(driver, url, connectionProperties);
+        return driverConnectionFactory;
+      } catch (Throwable x) {
+        LOG.warn("Got exception trying to instantiate connection factory. Trying default instantiation", x);
+        return super.createConnectionFactory();
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "HiveDataSource{"
+          + "driverClassName='" + driverClassName + '\''
+          + ", driverClassLoader=" + driverClassLoader
+          + ", url='" + url + '\''
+          + '}';
     }
   }
 }

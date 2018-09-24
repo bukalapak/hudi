@@ -73,7 +73,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   // use schema from a file produced in the latest instant
   val latestSchema = {
     val latestMeta = HoodieCommitMetadata
-      .fromBytes(commitTimeline.getInstantDetails(commitsToReturn.last).get)
+          .fromBytes(commitTimeline.getInstantDetails(commitsToReturn.last).get, classOf[HoodieCommitMetadata])
     val metaFilePath = latestMeta.getFileIdAndFullPaths(basePath).values().iterator().next()
     AvroConversionUtils.convertAvroSchemaToStructType(ParquetUtils.readAvroSchema(
       sqlContext.sparkContext.hadoopConfiguration, new Path(metaFilePath)))
@@ -84,11 +84,16 @@ class IncrementalRelation(val sqlContext: SQLContext,
   override def buildScan(): RDD[Row] = {
     val fileIdToFullPath = mutable.HashMap[String, String]()
     for (commit <- commitsToReturn) {
-      val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit).get)
+      val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
+        .get, classOf[HoodieCommitMetadata])
       fileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).toMap
     }
+    // unset the path filter, otherwise if end_instant_time is not the latest instant, path filter set for RO view
+    // will filter out all the files incorrectly.
+    sqlContext.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class");
     val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
     sqlContext.read.options(sOpts)
+      .schema(latestSchema) // avoid AnalysisException for empty input
       .parquet(fileIdToFullPath.values.toList: _*)
       .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.head.getTimestamp))
       .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, commitsToReturn.last.getTimestamp))

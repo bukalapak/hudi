@@ -34,7 +34,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 public class HoodieCompactor {
 
-  private static volatile Logger logger = LogManager.getLogger(HDFSParquetImporter.class);
+  private static volatile Logger logger = LogManager.getLogger(HoodieCompactor.class);
   private final Config cfg;
   private transient FileSystem fs;
 
@@ -51,12 +51,6 @@ public class HoodieCompactor {
     @Parameter(names = {"--instant-time",
         "-sp"}, description = "Compaction Instant time", required = true)
     public String compactionInstantTime = null;
-    @Parameter(names = {"--row-key-field",
-        "-rk"}, description = "Row key field name", required = true)
-    public String rowKey = null;
-    @Parameter(names = {"--partition-key-field",
-        "-pk"}, description = "Partition key field name", required = true)
-    public String partitionKey = null;
     @Parameter(names = {"--parallelism",
         "-pl"}, description = "Parallelism for hoodie insert", required = true)
     public int parallelism = 1;
@@ -86,7 +80,8 @@ public class HoodieCompactor {
       System.exit(1);
     }
     HoodieCompactor compactor = new HoodieCompactor(cfg);
-    compactor.compact(UtilHelpers.buildSparkContext(cfg.tableName, cfg.sparkMaster, cfg.sparkMemory), cfg.retry);
+    compactor.compact(UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory),
+        cfg.retry);
   }
 
   public int compact(JavaSparkContext jsc, int retry) {
@@ -120,8 +115,7 @@ public class HoodieCompactor {
 
   private int doSchedule(JavaSparkContext jsc) throws Exception {
     //Get schema.
-    String schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
-    HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism,
+    HoodieWriteClient client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism,
         Optional.of(cfg.strategyClassName));
     client.scheduleCompactionAtInstant(cfg.compactionInstantTime, Optional.empty());
     return 0;
