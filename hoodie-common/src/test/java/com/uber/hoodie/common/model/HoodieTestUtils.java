@@ -126,6 +126,10 @@ public class HoodieTestUtils {
     }
   }
 
+  public static final void createMetadataFolder(String basePath) throws IOException {
+    new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME).mkdirs();
+  }
+
   public static final void createInflightCommitFiles(String basePath, String... commitTimes) throws IOException {
     for (String commitTime : commitTimes) {
       new File(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeInflightCommitFileName(
@@ -213,6 +217,16 @@ public class HoodieTestUtils {
 
   public static final String getCommitFilePath(String basePath, String commitTime) throws IOException {
     return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime + HoodieTimeline.COMMIT_EXTENSION;
+  }
+
+  public static final String getInflightCommitFilePath(String basePath, String commitTime) throws IOException {
+    return basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + commitTime
+        + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
+  }
+
+  public static final String getRequestedCompactionFilePath(String basePath, String commitTime) throws IOException {
+    return basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + commitTime
+        + HoodieTimeline.INFLIGHT_COMMIT_EXTENSION;
   }
 
   public static final boolean doesDataFileExist(String basePath, String partitionPath, String commitTime, String fileID)

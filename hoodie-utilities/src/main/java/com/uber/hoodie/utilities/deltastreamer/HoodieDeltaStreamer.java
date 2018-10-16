@@ -54,7 +54,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
-import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -159,11 +158,8 @@ public class HoodieDeltaStreamer implements Serializable {
         }
       }
     } else {
-      Properties properties = new Properties();
-      properties.put(HoodieWriteConfig.TABLE_NAME, cfg.targetTableName);
-      HoodieTableMetaClient
-          .initializePathAsHoodieDataset(jssc.hadoopConfiguration(), cfg.targetBasePath,
-              properties);
+      HoodieTableMetaClient.initTableType(jssc.hadoopConfiguration(), cfg.targetBasePath,
+          cfg.storageType, cfg.targetTableName, "archived");
     }
     log.info("Checkpoint to resume from : " + resumeCheckpointStr);
 
@@ -183,8 +179,20 @@ public class HoodieDeltaStreamer implements Serializable {
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
-    // Perform the write
+    // filter dupes if needed
     HoodieWriteConfig hoodieCfg = getHoodieClientConfig();
+    if (cfg.filterDupes) {
+      // turn upserts to insert
+      cfg.operation = cfg.operation == Operation.UPSERT ? Operation.INSERT : cfg.operation;
+      records = DataSourceUtils.dropDuplicates(jssc, records, hoodieCfg);
+    }
+
+    if (records.isEmpty()) {
+      log.info("No new data, nothing to commit.. ");
+      return;
+    }
+
+    // Perform the write
     HoodieWriteClient client = new HoodieWriteClient<>(jssc, hoodieCfg);
     String commitTime = client.startCommit();
     log.info("Starting commit  : " + commitTime);
@@ -247,6 +255,10 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--target-table"}, description = "name of the target table in Hive", required = true)
     public String targetTableName;
 
+    @Parameter(names = {"--storage-type"}, description = "Type of Storage. "
+        + "COPY_ON_WRITE (or) MERGE_ON_READ", required = true)
+    public String storageType;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client, schema provider, key generator and data source. For hoodie client props, sane defaults are "
         + "used, but recommend use to provide basic things like metrics endpoints, hive configs etc. For sources, refer"
@@ -284,6 +296,10 @@ public class HoodieDeltaStreamer implements Serializable {
         + "is purely new data/inserts to gain speed)",
         converter = OperationConvertor.class)
     public Operation operation = Operation.UPSERT;
+
+    @Parameter(names = {"--filter-dupes"}, description = "Should duplicate records from source be dropped/filtered out"
+        + "before insert/bulk-insert")
+    public Boolean filterDupes = false;
 
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";

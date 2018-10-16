@@ -21,7 +21,7 @@
   <groupId>com.uber.hoodie</groupId>
   <artifactId>hoodie</artifactId>
   <packaging>pom</packaging>
-  <version>0.4.4-SNAPSHOT</version>
+  <version>0.4.5-SNAPSHOT</version>
   <description>Hoodie is a Apache Spark library that provides the ability to efficiently do
     incremental processing on datasets in HDFS
   </description>
@@ -39,6 +39,8 @@
     <module>packaging/hoodie-hadoop-mr-bundle</module>
     <module>packaging/hoodie-hive-bundle</module>
     <module>packaging/hoodie-spark-bundle</module>
+    <module>docker/hoodie/hadoop</module>
+    <module>hoodie-integ-test</module>
   </modules>
 
   <licenses>
@@ -57,14 +59,19 @@
 
   <developers>
     <developer>
-      <id>vinoth</id>
+      <id>vinothchandar</id>
       <name>Vinoth Chandar</name>
       <organization>Uber</organization>
     </developer>
     <developer>
-      <id>prasanna</id>
+      <id>prasannarajaperumal</id>
       <name>Prasanna Rajaperumal</name>
       <organization>Snowflake</organization>
+    </developer>
+    <developer>
+      <id>n3nash</id>
+      <name>Nishith Agarwal</name>
+      <organization>Uber</organization>
     </developer>
   </developers>
 
@@ -94,12 +101,16 @@
       <organization>Uber</organization>
     </contributor>
     <contributor>
-      <name>Nishith Agarwal</name>
+      <name>Balaji Varadharajan</name>
       <organization>Uber</organization>
     </contributor>
     <contributor>
-      <name>Balaji Varadharajan</name>
-      <organization>Uber</organization>
+      <name>Anbu Cheeralan</name>
+      <organization>DoubleVerify</organization>
+    </contributor>
+    <contributor>
+      <name>Jiale Tan</name>
+      <organization>Vungle</organization>
     </contributor>
   </contributors>
 
@@ -126,6 +137,7 @@
     <avro.version>1.7.7</avro.version>
     <scala.version>2.11.8</scala.version>
     <scala.libversion>2.11</scala.libversion>
+    <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire.properties</surefire-log4j.file>
   </properties>
 
   <scm>
@@ -212,7 +224,7 @@
           <argLine>${surefireArgLine}</argLine>
           <systemPropertyVariables>
             <log4j.configuration>
-              file:${project.build.testOutputDirectory}/log4j-surefire.properties
+              ${surefire-log4j.file}
             </log4j.configuration>
           </systemPropertyVariables>
           <!-- Excludes integration tests when unit tests are run. -->
@@ -288,7 +300,7 @@
               <exclude>**/*.sh</exclude>
               <exclude>**/*.log</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
-              <exclude>**/test/resources/*.avro</exclude>
+              <exclude>**/test/resources/*.avsc</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/test/resources/*.schema</exclude>
               <exclude>**/test/resources/*.csv</exclude>
@@ -624,7 +636,7 @@
       <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
-        <version>4.12</version>
+        <version>${junit.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.hadoop</groupId>
@@ -846,6 +858,17 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>warn-log</id>
+      <activation>
+        <property>
+          <name>env.HUDI_QUIETER_LOGGING</name>
+        </property>
+      </activation>
+      <properties>
+        <surefire-log4j.file>file://${project.basedir}/src/test/resources/log4j-surefire-quiet.properties</surefire-log4j.file>
+      </properties>
     </profile>
   </profiles>
 
