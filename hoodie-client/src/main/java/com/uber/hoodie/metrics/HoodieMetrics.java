@@ -118,6 +118,7 @@ public class HoodieMetrics {
       long totalUpdateRecordsWritten = metadata.fetchTotalUpdateRecordsWritten();
       long totalInsertRecordsWritten = metadata.fetchTotalInsertRecordsWritten();
       long totalBytesWritten = metadata.fetchTotalBytesWritten();
+      long totalErrors = metadata.fetchTotalWriteErrors();
       long totalTimeTakenByScanner = metadata.getTotalScanTime();
       long totalTimeTakenForInsert = metadata.getTotalCreateTime();
       long totalTimeTakenForUpsert = metadata.getTotalUpsertTime();
@@ -132,6 +133,7 @@ public class HoodieMetrics {
       registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
       registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
       registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
+      registerGauge(getMetricsName(actionType, "totalErrors"), totalErrors);
       registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
       registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
       registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
