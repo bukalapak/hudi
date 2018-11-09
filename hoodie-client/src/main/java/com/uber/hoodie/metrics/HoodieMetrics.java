@@ -126,6 +126,9 @@ public class HoodieMetrics {
       long totalLogFilesCompacted = metadata.getTotalLogFilesCompacted();
       long totalLogFilesSize = metadata.getTotalLogFilesSize();
       registerGauge(getMetricsName(actionType, "duration"), durationInMs);
+      registerGauge(getMetricsName(actionType, "totalErrors"), totalErrors);
+      registerGauge(getMetricsName(actionType, "writeAmplification"),
+              totalUpdateRecordsWritten > 0 ? totalRecordsWritten / totalUpdateRecordsWritten : 0);
       registerGauge(getMetricsName(actionType, "totalPartitionsWritten"), totalPartitionsWritten);
       registerGauge(getMetricsName(actionType, "totalFilesInsert"), totalFilesInsert);
       registerGauge(getMetricsName(actionType, "totalFilesUpdate"), totalFilesUpdate);
@@ -133,7 +136,6 @@ public class HoodieMetrics {
       registerGauge(getMetricsName(actionType, "totalUpdateRecordsWritten"), totalUpdateRecordsWritten);
       registerGauge(getMetricsName(actionType, "totalInsertRecordsWritten"), totalInsertRecordsWritten);
       registerGauge(getMetricsName(actionType, "totalBytesWritten"), totalBytesWritten);
-      registerGauge(getMetricsName(actionType, "totalErrors"), totalErrors);
       registerGauge(getMetricsName(actionType, "commitTime"), commitEpochTimeInMs);
       registerGauge(getMetricsName(actionType, "totalScanTime"), totalTimeTakenByScanner);
       registerGauge(getMetricsName(actionType, "totalCreateTime"), totalTimeTakenForInsert);
@@ -195,8 +197,9 @@ public class HoodieMetrics {
       case UDP:
         try {
           String[] metrics = metricName.split("\\.");
-          String message = String.format("%s|g|table=%s;action=%s;metric=%s|%d",
-                  config.getUdpMetricPrefix(), metrics[0], metrics[1], metrics[2], value);
+          String message = String.format("%s|g|table_type=%s;table=%s;action=%s;metric=%s|%d",
+                  config.getUdpMetricPrefix(), config.getHoodieTableType().name(), metrics[0], metrics[1], metrics[2],
+                  value);
           Metrics.getInstance().sendToUdp(message);
         } catch (Exception e) {
           logger.error(String.format("Failed to send metrics: {%s, %d}", metricName, value), e);

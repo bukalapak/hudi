@@ -16,6 +16,7 @@
 
 package com.uber.hoodie.config;
 
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.metrics.MetricsReporterType;
 import java.io.File;
 import java.io.FileReader;
@@ -35,6 +36,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String METRICS_REPORTER_TYPE = METRIC_PREFIX + ".reporter.type";
   public static final MetricsReporterType DEFAULT_METRICS_REPORTER_TYPE = MetricsReporterType
       .GRAPHITE;
+  public static final String HOODIE_TABLE_TYPE = METRIC_PREFIX + ".table.type";
+  public static final HoodieTableType DEFAULT_HOODIE_TABLE_TYPE = HoodieTableType.COPY_ON_WRITE;
 
   // Graphite
   public static final String GRAPHITE_PREFIX = METRIC_PREFIX + ".graphite";
@@ -92,6 +95,11 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
       return this;
     }
 
+    public Builder withTableType(String tableType) {
+      props.setProperty(HOODIE_TABLE_TYPE, tableType);
+      return this;
+    }
+
     public Builder toGraphiteHost(String host) {
       props.setProperty(GRAPHITE_SERVER_HOST, host);
       return this;
@@ -128,6 +136,8 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
           String.valueOf(DEFAULT_METRICS_ON));
       setDefaultOnCondition(props, !props.containsKey(METRICS_REPORTER_TYPE), METRICS_REPORTER_TYPE,
           DEFAULT_METRICS_REPORTER_TYPE.name());
+      setDefaultOnCondition(props, !props.containsKey(HOODIE_TABLE_TYPE), HOODIE_TABLE_TYPE,
+              DEFAULT_HOODIE_TABLE_TYPE.name());
       setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_HOST), GRAPHITE_SERVER_HOST,
           DEFAULT_GRAPHITE_SERVER_HOST);
       setDefaultOnCondition(props, !props.containsKey(GRAPHITE_SERVER_PORT), GRAPHITE_SERVER_PORT,

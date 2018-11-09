@@ -19,6 +19,7 @@ package com.uber.hoodie.config;
 import com.google.common.base.Preconditions;
 import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCleaningPolicy;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.index.HoodieIndex;
 import com.uber.hoodie.io.compact.strategy.CompactionStrategy;
@@ -369,6 +370,10 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public MetricsReporterType getMetricsReporterType() {
     return MetricsReporterType
         .valueOf(props.getProperty(HoodieMetricsConfig.METRICS_REPORTER_TYPE));
+  }
+
+  public HoodieTableType getHoodieTableType() {
+    return HoodieTableType.valueOf(props.getProperty(HoodieMetricsConfig.HOODIE_TABLE_TYPE));
   }
 
   public String getGraphiteServerHost() {
