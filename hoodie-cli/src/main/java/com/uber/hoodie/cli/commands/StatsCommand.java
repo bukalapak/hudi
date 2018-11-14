@@ -125,13 +125,15 @@ public class StatsCommand implements CommandMarker {
     Histogram globalHistogram = new Histogram(new UniformReservoir(MAX_FILES));
     HashMap<String, Histogram> commitHistoMap = new HashMap<String, Histogram>();
     for (FileStatus fileStatus : statuses) {
-      String commitTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
-      long sz = fileStatus.getLen();
-      if (!commitHistoMap.containsKey(commitTime)) {
-        commitHistoMap.put(commitTime, new Histogram(new UniformReservoir(MAX_FILES)));
+      if (!FSUtils.isLogFile(fileStatus.getPath())) {
+        String commitTime = FSUtils.getCommitTime(fileStatus.getPath().getName());
+        long sz = fileStatus.getLen();
+        if (!commitHistoMap.containsKey(commitTime)) {
+          commitHistoMap.put(commitTime, new Histogram(new UniformReservoir(MAX_FILES)));
+        }
+        commitHistoMap.get(commitTime).update(sz);
+        globalHistogram.update(sz);
       }
-      commitHistoMap.get(commitTime).update(sz);
-      globalHistogram.update(sz);
     }
 
     List<Comparable[]> rows = new ArrayList<>();
