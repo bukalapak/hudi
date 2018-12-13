@@ -29,6 +29,7 @@ import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordLocation;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
 import com.uber.hoodie.common.model.HoodieRollingStatMetadata;
+import com.uber.hoodie.common.model.HoodieWriteStat;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieActiveTimeline;
@@ -175,6 +176,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   public Iterator<List<WriteStatus>> handleUpdate(String commitTime, String fileId,
       Iterator<HoodieRecord<T>> recordItr) throws IOException {
+    // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
+    if (!recordItr.hasNext()) {
+      logger.info("Empty partition with fileId => " + fileId);
+      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+    }
     // these are updates
     HoodieMergeHandle upsertHandle = getUpdateHandle(commitTime, fileId, recordItr);
     return handleUpdateInternal(upsertHandle, commitTime, fileId);
@@ -234,6 +240,11 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
 
   public Iterator<List<WriteStatus>> handleInsert(String commitTime,
       Iterator<HoodieRecord<T>> recordItr) throws Exception {
+    // This is needed since sometimes some buckets are never picked in getPartition() and end up with 0 records
+    if (!recordItr.hasNext()) {
+      logger.info("Empty partition");
+      return Collections.singletonList((List<WriteStatus>) Collections.EMPTY_LIST).iterator();
+    }
     return new CopyOnWriteLazyInsertIterable<>(recordItr, config, commitTime, this);
   }
 
@@ -376,20 +387,19 @@ public class HoodieCopyOnWriteTable<T extends HoodieRecordPayload> extends Hoodi
   /**
    * Finalize the written data files
    *
-   * @param writeStatuses List of WriteStatus
+   * @param stats List of HoodieWriteStats
    * @return number of files finalized
    */
   @Override
   @SuppressWarnings("unchecked")
-  public void finalizeWrite(JavaSparkContext jsc, List<WriteStatus> writeStatuses)
+  public void finalizeWrite(JavaSparkContext jsc, List<HoodieWriteStat> stats)
       throws HoodieIOException {
 
-    super.finalizeWrite(jsc, writeStatuses);
+    super.finalizeWrite(jsc, stats);
 
     if (config.shouldUseTempFolderForCopyOnWrite()) {
       // This is to rename each data file from temporary path to its final location
-      jsc.parallelize(writeStatuses, config.getFinalizeWriteParallelism())
-          .map(status -> status.getStat())
+      jsc.parallelize(stats, config.getFinalizeWriteParallelism())
           .foreach(writeStat -> {
             final FileSystem fs = getMetaClient().getFs();
             final Path finalPath = new Path(config.getBasePath(), writeStat.getPath());

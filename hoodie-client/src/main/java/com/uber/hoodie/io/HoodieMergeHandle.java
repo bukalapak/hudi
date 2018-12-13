@@ -30,8 +30,6 @@ import com.uber.hoodie.common.util.FSUtils;
 import com.uber.hoodie.common.util.HoodieRecordSizeEstimator;
 import com.uber.hoodie.common.util.ReflectionUtils;
 import com.uber.hoodie.common.util.collection.ExternalSpillableMap;
-import com.uber.hoodie.common.util.collection.converter.HoodieRecordConverter;
-import com.uber.hoodie.common.util.collection.converter.StringConverter;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieIOException;
 import com.uber.hoodie.exception.HoodieUpsertException;
@@ -103,12 +101,12 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       writeStatus.getStat().setPrevCommit(FSUtils.getCommitTime(latestValidFilePath));
 
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(fs, commitTime,
-          new Path(config.getBasePath()), new Path(config.getBasePath(), partitionPath));
+          new Path(config.getBasePath()), FSUtils.getPartitionPath(config.getBasePath(), partitionPath));
       partitionMetadata.trySave(TaskContext.getPartitionId());
 
       oldFilePath = new Path(
           config.getBasePath() + "/" + partitionPath + "/" + latestValidFilePath);
-      String relativePath = new Path(partitionPath + "/" + FSUtils
+      String relativePath = new Path((partitionPath.isEmpty() ? "" : partitionPath + "/") + FSUtils
           .makeDataFileName(commitTime, TaskContext.getPartitionId(), fileId)).toString();
       newFilePath = new Path(config.getBasePath(), relativePath);
       if (config.shouldUseTempFolderForCopyOnWriteForMerge()) {
@@ -127,6 +125,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       // file name is same for all records, in this bunch
       writeStatus.setFileId(fileId);
       writeStatus.setPartitionPath(partitionPath);
+      writeStatus.getStat().setPartitionPath(partitionPath);
       writeStatus.getStat().setFileId(fileId);
       writeStatus.getStat().setPaths(new Path(config.getBasePath()), newFilePath, tempPath);
       // Create the writer for writing the new version file
@@ -149,9 +148,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload> extends HoodieIOHa
       // Load the new records in a map
       logger.info("MaxMemoryPerPartitionMerge => " + config.getMaxMemoryPerPartitionMerge());
       this.keyToNewRecords = new ExternalSpillableMap<>(config.getMaxMemoryPerPartitionMerge(),
-          config.getSpillableMapBasePath(), new StringConverter(),
-          new HoodieRecordConverter(schema, config.getPayloadClass()),
-          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema));
+          config.getSpillableMapBasePath(), new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(schema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
