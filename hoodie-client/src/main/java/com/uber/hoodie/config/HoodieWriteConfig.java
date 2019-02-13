@@ -399,6 +399,11 @@ public class HoodieWriteConfig extends DefaultHoodieConfig {
   public String getUdpMetricPrefix() {
     return props.getProperty(HoodieMetricsConfig.UDP_METRIC_PREFIX);
   }
+
+  public String getUdpMetricLabels() {
+    return props.getProperty(HoodieMetricsConfig.UDP_METRIC_LABELS);
+  }
+
   /**
    * memory configs
    */

@@ -56,6 +56,7 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
   public static final String UDP_SERVER_PORT = UDP_PREFIX + ".port";
   public static final int DEFAULT_UDP_SERVER_PORT = 8080;
   public static final String UDP_METRIC_PREFIX = UDP_PREFIX + ".metric.prefix";
+  public static final String UDP_METRIC_LABELS = UDP_PREFIX + ".metric.labels";
 
   private HoodieMetricsConfig(Properties props) {
     super(props);
@@ -127,6 +128,11 @@ public class HoodieMetricsConfig extends DefaultHoodieConfig {
 
     public Builder useUdpPrefix(String prefix) {
       props.setProperty(UDP_METRIC_PREFIX, prefix);
+      return this;
+    }
+
+    public Builder useUdpLabels(String labels) {
+      props.setProperty(UDP_METRIC_LABELS, labels);
       return this;
     }
 

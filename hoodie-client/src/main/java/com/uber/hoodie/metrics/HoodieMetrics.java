@@ -197,8 +197,16 @@ public class HoodieMetrics {
       case UDP:
         try {
           String[] metrics = metricName.split("\\.");
-          String message = String.format("%s|g|table_type=%s;table=%s;action=%s;metric=%s|%d",
-            config.getUdpMetricPrefix(), config.getHoodieTableType().name(), metrics[0], metrics[1], metrics[2], value);
+          String message;
+          if (config.getUdpMetricLabels() != null && config.getUdpMetricLabels().length() != 0) {
+            message = String.format("%s|g|table_type=%s;table=%s;action=%s;metric=%s;%s|%d",
+              config.getUdpMetricPrefix(), config.getHoodieTableType().name(), metrics[0], metrics[1], metrics[2],
+              config.getUdpMetricLabels(), value);
+          } else {
+            message = String.format("%s|g|table_type=%s;table=%s;action=%s;metric=%s|%d",
+              config.getUdpMetricPrefix(), config.getHoodieTableType().name(), metrics[0], metrics[1], metrics[2],
+              value);
+          }
           Metrics.getInstance().sendToUdp(message);
         } catch (Exception e) {
           logger.error(String.format("Failed to send metrics: {%s, %d}", metricName, value), e);
