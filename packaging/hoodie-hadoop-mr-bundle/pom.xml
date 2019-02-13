@@ -168,6 +168,7 @@
                   <include>com.twitter:parquet-avro</include>
                   <include>com.twitter:parquet-hadoop-bundle</include>
                   <include>com.twitter.common:objectsize</include>
+                  <include>commons-io:commons-io</include>
                   <include>commons-logging:commons-logging</include>
                 </includes>
               </artifactSet>
