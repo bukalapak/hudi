@@ -16,24 +16,30 @@
 
 package com.uber.hoodie.metrics;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.io.Closeables;
 import com.uber.hoodie.config.HoodieWriteConfig;
 import com.uber.hoodie.exception.HoodieException;
 import java.io.Closeable;
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 /**
  * This is the main class of the metrics system.
  */
 public class Metrics {
+  private static Logger logger = LogManager.getLogger(Metrics.class);
 
   private static volatile boolean initialized = false;
   private static Metrics metrics = null;
+  private static HoodieWriteConfig config;
   private final MetricRegistry registry;
   private MetricsReporter reporter = null;
 
   private Metrics(HoodieWriteConfig metricConfig) throws ConfigurationException {
+    config = metricConfig;
     registry = new MetricRegistry();
 
     reporter = MetricsReporterFactory.createReporter(metricConfig, registry);
@@ -70,6 +76,40 @@ public class Metrics {
       throw new HoodieException(e);
     }
     initialized = true;
+  }
+
+  public static void registerGauge(String metricName, final long value) {
+    switch (config.getMetricsReporterType()) {
+      case GRAPHITE:
+        try {
+          MetricRegistry registry = Metrics.getInstance().getRegistry();
+          registry.register(metricName, (Gauge<Long>) () -> value);
+        } catch (Exception e) {
+          // Here we catch all exception, so the major upsert pipeline will not be affected if the
+          // metrics system
+          // has some issues.
+          logger.error("Failed to send metrics: ", e);
+        }
+        break;
+      case UDP:
+        try {
+          String[] metrics = metricName.split("\\.");
+          String message;
+          if (config.getUdpMetricLabels() != null && config.getUdpMetricLabels().length() != 0) {
+            message = String.format("%s|g|table_type=%s;table=%s;action=%s;metric=%s;%s|%d",
+                    config.getUdpMetricPrefix(), config.getHoodieTableType().name(), metrics[0], metrics[1], metrics[2],
+                    config.getUdpMetricLabels(), value);
+          } else {
+            message = String.format("%s|g|table_type=%s;table=%s;action=%s;metric=%s|%d",
+                    config.getUdpMetricPrefix(), config.getHoodieTableType().name(), metrics[0], metrics[1], metrics[2],
+                    value);
+          }
+          Metrics.getInstance().sendToUdp(message);
+        } catch (Exception e) {
+          logger.error(String.format("Failed to send metrics: {%s, %d}", metricName, value), e);
+        }
+        break;
+    }
   }
 
   public MetricRegistry getRegistry() {
