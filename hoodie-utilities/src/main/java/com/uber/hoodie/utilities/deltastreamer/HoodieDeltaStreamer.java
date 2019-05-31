@@ -36,6 +36,7 @@ import com.uber.hoodie.WriteStatus;
 import com.uber.hoodie.common.model.HoodieCommitMetadata;
 import com.uber.hoodie.common.model.HoodieRecord;
 import com.uber.hoodie.common.model.HoodieRecordPayload;
+import com.uber.hoodie.common.model.HoodieTableType;
 import com.uber.hoodie.common.table.HoodieTableMetaClient;
 import com.uber.hoodie.common.table.HoodieTimeline;
 import com.uber.hoodie.common.table.timeline.HoodieInstant;
@@ -242,7 +243,7 @@ public class HoodieDeltaStreamer implements Serializable {
     JavaRDD<GenericRecord> avroRDD = avroRDDOptional.get();
     JavaRDD<HoodieRecord> records = avroRDD.map(gr -> {
       HoodieRecordPayload payload = DataSourceUtils.createPayload(cfg.payloadClassName, gr,
-          (Comparable) gr.get(cfg.sourceOrderingField));
+          (Comparable) DataSourceUtils.getNestedFieldVal(gr, cfg.sourceOrderingField));
       return new HoodieRecord<>(keyGenerator.getKey(gr), payload);
     });
 
@@ -275,24 +276,42 @@ public class HoodieDeltaStreamer implements Serializable {
       throw new HoodieDeltaStreamerException("Unknown operation :" + cfg.operation);
     }
 
-    // Simply commit for now. TODO(vc): Support better error handlers later on
-    HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-    checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
+    long totalErrorRecords = writeStatusRDD.mapToDouble(ws -> ws.getTotalErrorRecords()).sum().longValue();
+    long totalRecords = writeStatusRDD.mapToDouble(ws -> ws.getTotalRecords()).sum().longValue();
+    boolean hasErrors = totalErrorRecords > 0;
+    long hiveSyncTimeMs = 0;
+    if (!hasErrors || cfg.commitOnErrors) {
+      HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
+      checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
 
-    boolean success = client.commit(commitTime, writeStatusRDD,
-        Optional.of(checkpointCommitMetadata));
-    if (success) {
-      log.info("Commit " + commitTime + " successful!");
-      // TODO(vc): Kick off hive sync from here.
+      if (hasErrors) {
+        log.warn("Some records failed to be merged but forcing commit since commitOnErrors set. Errors/Total="
+            + totalErrorRecords + "/" + totalRecords);
+      }
+
+      boolean success = client.commit(commitTime, writeStatusRDD,
+          Optional.of(checkpointCommitMetadata));
+      if (success) {
+        log.info("Commit " + commitTime + " successful!");
+        // Sync to hive if enabled
+        Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
+        syncHive();
+        hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
+      } else {
+        log.info("Commit " + commitTime + " failed!");
+      }
     } else {
-      log.info("Commit " + commitTime + " failed!");
+      log.error("There are errors when ingesting records. Errors/Total="
+          + totalErrorRecords + "/" + totalRecords);
+      log.error("Printing out the top 100 errors");
+      writeStatusRDD.filter(ws -> ws.hasErrors()).take(100).forEach(ws -> {
+        log.error("Global error :", ws.getGlobalError());
+        if (ws.getErrors().size() > 0) {
+          ws.getErrors().entrySet().forEach(r ->
+              log.trace("Error for key:" + r.getKey() + " is " + r.getValue()));
+        }
+      });
     }
-
-    // Sync to hive if enabled
-    Timer.Context hiveSyncContext = metrics.getHiveSyncTimerContext();
-    syncHive();
-    long hiveSyncTimeMs = hiveSyncContext != null ? hiveSyncContext.stop() : 0;
-
     client.close();
     long overallTimeMs = overallTimerContext != null ? overallTimerContext.stop() : 0;
 
@@ -323,17 +342,22 @@ public class HoodieDeltaStreamer implements Serializable {
     }
   }
 
-  private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) throws Exception {
+  private HoodieWriteConfig getHoodieClientConfig(SchemaProvider schemaProvider) {
     HoodieWriteConfig.Builder builder =
-        HoodieWriteConfig.newBuilder().combineInput(true, true).withPath(cfg.targetBasePath)
-            .withAutoCommit(false)
-            .withCompactionConfig(HoodieCompactionConfig.newBuilder().withPayloadClass(cfg.payloadClassName).build())
+        HoodieWriteConfig.newBuilder().withPath(cfg.targetBasePath)
+            .withAutoCommit(false).combineInput(cfg.filterDupes, true)
+            .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+                .withPayloadClass(cfg.payloadClassName)
+                // turn on inline compaction by default, for MOR tables
+                .withInlineCompaction(HoodieTableType.valueOf(cfg.storageType) == HoodieTableType.MERGE_ON_READ)
+                .build())
             .forTable(cfg.targetTableName)
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withProps(props);
     if (null != schemaProvider) {
       builder = builder.withSchema(schemaProvider.getTargetSchema().toString());
     }
+
     return builder.build();
   }
 
@@ -341,7 +365,7 @@ public class HoodieDeltaStreamer implements Serializable {
     UPSERT, INSERT, BULK_INSERT
   }
 
-  private class OperationConvertor implements IStringConverter<Operation> {
+  private static class OperationConvertor implements IStringConverter<Operation> {
     @Override
     public Operation convert(String value) throws ParameterException {
       return Operation.valueOf(value);
@@ -425,6 +449,9 @@ public class HoodieDeltaStreamer implements Serializable {
 
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";
+
+    @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
+    public Boolean commitOnErrors = false;
 
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
